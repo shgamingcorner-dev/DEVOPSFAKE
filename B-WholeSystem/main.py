@@ -74,6 +74,9 @@ controller = None          # FireAlarmController (recovery + false alarm)
 key_queue = queue.Queue()
 last_thingspeak_upload = time.time()
 
+# LCD instance (set in main()); module-level so deactivation can use it
+lcd = None
+
 # --------------------------------------------------------------------------
 # HAL callback
 # --------------------------------------------------------------------------

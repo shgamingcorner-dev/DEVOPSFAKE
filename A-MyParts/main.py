@@ -66,6 +66,9 @@ key_queue = queue.Queue()
 recovery_event = threading.Event()
 false_alarm_event = threading.Event()
 
+# LCD instance (set in main()); module-level so deactivate_emergency can use it
+lcd = None
+
 # --------------------------------------------------------------------------
 # Deactivation helper (shared by recovery + false alarm)
 # --------------------------------------------------------------------------
@@ -162,8 +165,6 @@ def main():
     global lcd
     lcd = LCD.lcd()
     lcd.lcd_clear()
-
-    # start threads
     keypad.init(key_pressed)
     threading.Thread(target=keypad_thread_fn, daemon=True).start()
     threading.Thread(target=monitor_thread_fn, daemon=True).start()

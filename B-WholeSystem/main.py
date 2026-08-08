@@ -114,15 +114,26 @@ def send_telegram(message):
         print(f"[telegram] send failed (offline?): {e}")
 
 
+_telegram_offset = None   # last processed update_id (so '995' isn't re-triggered)
+
+
 def get_telegram_manual_command():
     """
     Check the latest incoming Telegram message for the manual activation
     command "995" (SRS 2.3.3 REQ-04). Returns True if 995 was received.
+    Advances the update offset so a message is only processed once.
     """
+    global _telegram_offset
     try:
-        r = requests.get(f"{TELEGRAM_API}/getUpdates", timeout=5)
+        url = f"{TELEGRAM_API}/getUpdates"
+        if _telegram_offset is not None:
+            url += f"?offset={_telegram_offset + 1}"
+        r = requests.get(url, timeout=5)
         updates = r.json().get("result", [])
         for u in updates:
+            update_id = u.get("update_id")
+            if update_id is not None:
+                _telegram_offset = max(_telegram_offset or 0, update_id)
             text = u.get("message", {}).get("text", "")
             if text == "995":
                 return True
@@ -256,7 +267,7 @@ def main():
         read_temperature=lambda: temp_humid_sensor.read_temp_humidity()[0],
         read_moisture=moisture_sensor.read_sensor,
         get_time=time.time,
-        state=State.AWAKE,
+        state=State.SLEEP,   # SRS REQ-01: starts in Sleep until slide switch right
     )
 
     # threads

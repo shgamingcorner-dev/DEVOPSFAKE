@@ -26,6 +26,10 @@ call HTTPS endpoints itself).
 import queue
 import threading
 import time
+
+import os
+from dotenv import load_dotenv
+
 import requests
 
 from hal import hal_led as led
@@ -51,8 +55,11 @@ from fire_alarm import (
 )
 
 # --------------------------------------------------------------------------
-# SRS constants
+# Environment variables (from .env — see .env.example)
 # --------------------------------------------------------------------------
+load_dotenv()  # reads B-WholeSystem/.env when running from this folder
+
+# SRS constants
 FIRE_TEMP_C = 60.0            # SRS 2.3.3: auto-activation temp threshold
 LDR_SMOKE_THRESHOLD = 300     # ADC value below this => smoke (calibrate!)
 THINGSPEAK_UPLOAD_SECONDS = 15.0   # SRS 2.4.2
@@ -60,12 +67,12 @@ TELEGRAM_POLL_SECONDS = 1.0
 SAMPLE_PERIOD_SECONDS = 1.0
 
 # Telegram Bot API (direct from the Pi)
-TELEGRAM_BOT_TOKEN = "123456:ABC-DEF..."   # TODO: replace with your bot token
-TELEGRAM_CHAT_ID = "123456789"             # TODO: replace with your chat id
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # ThingSpeak (direct from the Pi)
-THINGSPEAK_API_KEY = "XXXXXXXXXXXXXXXX"    # TODO: replace with your channel key
+THINGSPEAK_API_KEY = os.getenv("THINGSPEAK_API_KEY", "")
 THINGSPEAK_URL = "https://api.thingspeak.com/update"
 
 # --------------------------------------------------------------------------

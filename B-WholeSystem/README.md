@@ -45,11 +45,13 @@ Emergency ──(keypad "123")──> Awake                (false alarm)
 ## Deploy / run
 
 1. Raspberry Pi with HAL modules in `hal/`.
-2. Install deps: `pip install RPi.GPIO spidev smbus requests`
-3. Fill in real credentials in `main.py`:
-   - `TELEGRAM_BOT_TOKEN` (from @BotFather)
-   - `TELEGRAM_CHAT_ID`
-   - `THINGSPEAK_API_KEY`
+2. Install deps: `pip install RPi.GPIO spidev smbus requests python-dotenv`
+3. Create `.env` from the template (real credentials, **never commit**):
+   ```bash
+   cp .env.example .env
+   # then edit .env and fill in:
+   #   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, THINGSPEAK_API_KEY
+   ```
 4. Run:
 
 ```bash
@@ -57,7 +59,8 @@ python main.py
 ```
 
 Telegram + ThingSpeak are called **directly from the Pi** via `requests`
-(no relay server needed).
+(no relay server needed). Credentials load from `.env` (python-dotenv);
+`.env.example` shows the required variables for teammates.
 
 ## Calibration needed (before grading)
 

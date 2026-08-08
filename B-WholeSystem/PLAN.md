@@ -7,15 +7,15 @@
 verified end-to-end.
 
 **Architecture:** State machine (`Sleep → Awake → Emergency → Awake`) on Raspberry Pi
-+ Python HAL (RPi.GPIO), threaded (keypad / monitor / telegram), with a Flask relay
-on PythonAnywhere for Telegram + ThingSpeak.
++ Python HAL (RPi.GPIO), threaded (keypad / monitor / telegram), calling
+Telegram + ThingSpeak **directly** via `requests` (no relay server).
 
 ---
 
 ## Current state (validated)
 
 - `fire_alarm.py` (recovery + false alarm) done + 20 tests green.
-- `main.py` whole-system skeleton written (states, sensors, outputs, relay hooks).
+- `main.py` whole-system skeleton written (states, sensors, outputs, `requests` hooks).
 - HAL submodule present (`hal/`, RPi.GPIO modules).
 - **Not yet verified on hardware** — calibration values are placeholders.
 
@@ -35,11 +35,11 @@ on PythonAnywhere for Telegram + ThingSpeak.
 - [ ] Sleep→Awake via slide switch; LCD "System ready :)".
 - [ ] Threads: keypad, monitor, telegram; main loop state handling.
 
-### Phase 3 — Cloud relay (1–2 h)
-- [ ] Flask relay on PythonAnywhere: `/telegram/command`, `/telegram/send`,
-      `/thingspeak/upload`.
-- [ ] `curl` tests for each endpoint (user's preferred verification).
-- [ ] Wire real URLs into `main.py` constants.
+### Phase 3 — Cloud integration (1–2 h)
+- [ ] Fill in Telegram Bot token + chat id + ThingSpeak API key in `main.py`.
+- [ ] `curl`-style test: `requests.post(...)` to Telegram + ThingSpeak from the Pi
+      (user's preferred verification).
+- [ ] Confirm `requests` installed on the Pi.
 
 ### Phase 4 — Verification (1–2 h)
 - [ ] `pytest test_fire_alarm.py -v` → 20 passed.

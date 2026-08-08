@@ -45,15 +45,19 @@ Emergency ──(keypad "123")──> Awake                (false alarm)
 ## Deploy / run
 
 1. Raspberry Pi with HAL modules in `hal/`.
-2. Relay (PythonAnywhere Flask) with endpoints:
-   - `GET /telegram/command` → `{"command": "995"}` when manual alert
-   - `POST /telegram/send` (body `{"message": "Fire detected!"}`)
-   - `POST /thingspeak/upload` (body `{"temp","moisture","ldr"}`)
-3. Set real URLs in `main.py` (RELAY_BASE / *_URL constants).
+2. Install deps: `pip install RPi.GPIO spidev smbus requests`
+3. Fill in real credentials in `main.py`:
+   - `TELEGRAM_BOT_TOKEN` (from @BotFather)
+   - `TELEGRAM_CHAT_ID`
+   - `THINGSPEAK_API_KEY`
+4. Run:
 
 ```bash
 python main.py
 ```
+
+Telegram + ThingSpeak are called **directly from the Pi** via `requests`
+(no relay server needed).
 
 ## Calibration needed (before grading)
 

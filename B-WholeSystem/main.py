@@ -13,21 +13,20 @@ Threading model:
   - keypad_thread   : HAL keypad scanner -> key queue
   - monitor_thread  : polls temp + moisture + LDR continuously;
                       drives auto-detection (entry) and auto-recovery (exit)
-  - telegram_thread : polls a relay for the "995" manual command
+  - telegram_thread : polls Telegram for the "995" manual command
   - main loop       : applies state transitions + outputs
 
 Recovery + False Alarm logic is in fire_alarm.py (shared with folder A).
 HAL modules are RPi.GPIO based (Raspberry Pi).
 
-NOTE: Telegram/ThingSpeak go through the Flask relay (user's proven pattern).
-The relay endpoints are placeholders here — wire real URLs in deployment.
+Networking uses the `requests` library directly (no relay needed — the Pi can
+call HTTPS endpoints itself).
 """
 
 import queue
 import threading
 import time
-import urllib.request
-import json
+import requests
 
 from hal import hal_led as led
 from hal import hal_lcd as LCD
@@ -60,10 +59,14 @@ THINGSPEAK_UPLOAD_SECONDS = 15.0   # SRS 2.4.2
 TELEGRAM_POLL_SECONDS = 1.0
 SAMPLE_PERIOD_SECONDS = 1.0
 
-# Cloud relay endpoints (placeholders — wire real URLs on deploy)
-RELAY_BASE = "https://your-relay.pythonanywhere.com"
-TELEGRAM_COMMAND_URL = RELAY_BASE + "/telegram/command"   # GET -> "995"?
-THINGSPEAK_UPLOAD_URL = RELAY_BASE + "/thingspeak/upload"  # POST sensor data
+# Telegram Bot API (direct from the Pi)
+TELEGRAM_BOT_TOKEN = "123456:ABC-DEF..."   # TODO: replace with your bot token
+TELEGRAM_CHAT_ID = "123456789"             # TODO: replace with your chat id
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
+# ThingSpeak (direct from the Pi)
+THINGSPEAK_API_KEY = "XXXXXXXXXXXXXXXX"    # TODO: replace with your channel key
+THINGSPEAK_URL = "https://api.thingspeak.com/update"
 
 # --------------------------------------------------------------------------
 # Shared state
@@ -89,6 +92,60 @@ def keypad_thread_fn():
 
 
 # --------------------------------------------------------------------------
+# Telegram helpers (direct HTTPS via requests)
+# --------------------------------------------------------------------------
+def send_telegram(message):
+    """Send a Telegram message (SRS 2.3.3 REQ-07)."""
+    print(f"[telegram] -> {message}")
+    try:
+        requests.post(
+            f"{TELEGRAM_API}/sendMessage",
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": message},
+            timeout=5,
+        )
+    except Exception as e:
+        print(f"[telegram] send failed (offline?): {e}")
+
+
+def get_telegram_manual_command():
+    """
+    Check the latest incoming Telegram message for the manual activation
+    command "995" (SRS 2.3.3 REQ-04). Returns True if 995 was received.
+    """
+    try:
+        r = requests.get(f"{TELEGRAM_API}/getUpdates", timeout=5)
+        updates = r.json().get("result", [])
+        for u in updates:
+            text = u.get("message", {}).get("text", "")
+            if text == "995":
+                return True
+        return False
+    except Exception:
+        return False  # offline: skip
+
+
+# --------------------------------------------------------------------------
+# ThingSpeak helper (direct HTTPS via requests)
+# --------------------------------------------------------------------------
+def upload_thingspeak():
+    """Upload sensor readings to ThingSpeak (SRS 2.4.2)."""
+    temp, _h = temp_humid_sensor.read_temp_humidity()
+    moisture = moisture_sensor.read_sensor()
+    ldr = adc.get_adc_value(0)
+    payload = {
+        "api_key": THINGSPEAK_API_KEY,
+        "field1": temp,
+        "field2": ldr,
+        "field3": 1 if moisture else 0,
+    }
+    print(f"[thingspeak] upload: {payload}")
+    try:
+        requests.post(THINGSPEAK_URL, data=payload, timeout=5)
+    except Exception as e:
+        print(f"[thingspeak] upload failed (offline?): {e}")
+
+
+# --------------------------------------------------------------------------
 # Emergency entry (SRS 2.3.3)
 # --------------------------------------------------------------------------
 def activate_emergency():
@@ -105,38 +162,6 @@ def activate_emergency():
     lcd.lcd_display_string("FIRE DETECTED!", 1)
     lcd.lcd_display_string("EVACUATE NOW", 2)
     send_telegram("Fire detected!")
-
-
-def send_telegram(message):
-    """Simulated Telegram send via relay (SRS 2.3.3 REQ-07)."""
-    print(f"[telegram] -> {message}")
-    try:
-        req = urllib.request.Request(
-            RELAY_BASE + "/telegram/send",
-            data=json.dumps({"message": message}).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        urllib.request.urlopen(req, timeout=2)
-    except Exception as e:
-        print(f"[telegram] send failed (offline?): {e}")
-
-
-def upload_thingspeak():
-    """Upload sensor readings (SRS 2.4.2)."""
-    temp, _h = temp_humid_sensor.read_temp_humidity()
-    moisture = moisture_sensor.read_sensor()
-    ldr = adc.get_adc_value(0)
-    payload = {"temp": temp, "moisture": moisture, "ldr": ldr}
-    print(f"[thingspeak] upload: {payload}")
-    try:
-        req = urllib.request.Request(
-            THINGSPEAK_UPLOAD_URL,
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        urllib.request.urlopen(req, timeout=2)
-    except Exception as e:
-        print(f"[thingspeak] upload failed (offline?): {e}")
 
 
 # --------------------------------------------------------------------------
@@ -177,14 +202,9 @@ def monitor_thread_fn():
 # --------------------------------------------------------------------------
 def telegram_thread_fn():
     while True:
-        try:
-            with urllib.request.urlopen(TELEGRAM_COMMAND_URL, timeout=2) as r:
-                data = json.loads(r.read().decode())
-            if data.get("command") == "995":
-                print("[telegram] manual '995' -> emergency")
-                activate_emergency()
-        except Exception:
-            pass  # offline: skip
+        if get_telegram_manual_command():
+            print("[telegram] manual '995' -> emergency")
+            activate_emergency()
         time.sleep(TELEGRAM_POLL_SECONDS)
 
 

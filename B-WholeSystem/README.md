@@ -48,7 +48,11 @@ Emergency ──(keypad "123")──> Awake                (false alarm)
 ## Deploy / run
 
 1. Raspberry Pi with HAL modules in `hal/`.
-2. Install deps: `pip install RPi.GPIO spidev smbus requests python-dotenv`
+2. Install deps (one command):
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+   (RPi.GPIO, spidev, smbus, requests, python-dotenv)
 3. Create `.env` from the template (real credentials, **never commit**):
    ```bash
    cp .env.example .env

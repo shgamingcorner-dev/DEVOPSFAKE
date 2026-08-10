@@ -77,8 +77,11 @@ def _install_stubs():
     })
 
     req = types.ModuleType("requests")
-    req.post = lambda url, json=None, data=None, timeout=None: print(f"  [http POST] {url}")
-    req.get = lambda url, timeout=None: type("R", (), {"json": lambda self: {"result": [{"message": {"text": "995"}}]}})()
+    req.post = lambda url, json=None, data=None, params=None, timeout=None: print(f"  [http POST] {url}")
+    req.get = lambda url, params=None, timeout=None: type("R", (), {
+        "json": lambda self: {"result": [{"message": {"text": "995"}}]},
+        "raise_for_status": lambda self: None,
+    })()
     sys.modules["requests"] = req
 
 
@@ -196,7 +199,8 @@ def setup_system():
     threading.Thread(target=app.telegram_thread_fn, daemon=True).start()
 
     # warn about placeholder keys
-    if app.TELEGRAM_BOT_TOKEN in ("", "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"):
+    import telegram_bot as tb
+    if tb.BOT_TOKEN in ("", "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"):
         print("WARNING: TELEGRAM_BOT_TOKEN looks unset/placeholder — edit B-WholeSystem/.env")
     if app.THINGSPEAK_API_KEY in ("", "XXXXXXXXXXXXXXXX"):
         print("WARNING: THINGSPEAK_API_KEY looks unset/placeholder — edit B-WholeSystem/.env")

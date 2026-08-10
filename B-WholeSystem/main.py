@@ -54,6 +54,12 @@ from fire_alarm import (
     LCD_FALSE_ALARM_LINE2,
 )
 
+# Teammates' modules:
+#   - telegram_bot.py     (Harshita) REQ-07 multi-recipient + REQ-04 '995'
+#   - emergency_response.py (Vishal) REQ-06/07/LED/servo/LCD emergency actions
+from telegram_bot import send_emergency_alert, start_command_listener
+from emergency_response import emergency_response, reset_system
+
 # --------------------------------------------------------------------------
 # Environment variables (from .env — see .env.example)
 # --------------------------------------------------------------------------
@@ -63,13 +69,11 @@ load_dotenv()  # reads B-WholeSystem/.env when running from this folder
 FIRE_TEMP_C = 60.0            # SRS 2.3.3: auto-activation temp threshold
 LDR_SMOKE_THRESHOLD = 300     # ADC value below this => smoke (calibrate!)
 THINGSPEAK_UPLOAD_SECONDS = 15.0   # SRS 2.4.2
-TELEGRAM_POLL_SECONDS = 1.0
 SAMPLE_PERIOD_SECONDS = 1.0
 
-# Telegram Bot API (direct from the Pi)
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+# Telegram credentials are read by telegram_bot.py from .env
+# (TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_CHAT_ID, TELEGRAM_CAREGIVER_CHAT_ID,
+#  TELEGRAM_SCDF_CHAT_ID) — see .env.example
 
 # ThingSpeak (direct from the Pi)
 THINGSPEAK_API_KEY = os.getenv("THINGSPEAK_API_KEY", "")
@@ -99,48 +103,12 @@ def keypad_thread_fn():
 
 
 # --------------------------------------------------------------------------
-# Telegram helpers (direct HTTPS via requests)
+# Telegram helpers (Harshita's telegram_bot.py — REQ-04 '995' + REQ-07 alerts)
 # --------------------------------------------------------------------------
-def send_telegram(message):
-    """Send a Telegram message (SRS 2.3.3 REQ-07)."""
-    print(f"[telegram] -> {message}")
-    try:
-        requests.post(
-            f"{TELEGRAM_API}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": message},
-            timeout=5,
-        )
-    except Exception as e:
-        print(f"[telegram] send failed (offline?): {e}")
-
-
-_telegram_offset = None   # last processed update_id (so '995' isn't re-triggered)
-
-
-def get_telegram_manual_command():
-    """
-    Check the latest incoming Telegram message for the manual activation
-    command "995" (SRS 2.3.3 REQ-04). Returns True if 995 was received.
-    Advances the update offset so a message is only processed once.
-    """
-    global _telegram_offset
-    try:
-        url = f"{TELEGRAM_API}/getUpdates"
-        if _telegram_offset is not None:
-            url += f"?offset={_telegram_offset + 1}"
-        r = requests.get(url, timeout=5)
-        updates = r.json().get("result", [])
-        for u in updates:
-            update_id = u.get("update_id")
-            if update_id is not None:
-                _telegram_offset = max(_telegram_offset or 0, update_id)
-            text = u.get("message", {}).get("text", "")
-            if text == "995":
-                return True
-        return False
-    except Exception:
-        return False  # offline: skip
-
+# send_emergency_alert() -> sends to owner/caregiver/SCDF (REQ-07)
+# start_command_listener(on_995_received) -> polls '995' (REQ-04)
+# Both read credentials from .env (TELEGRAM_* env vars).
+# 
 
 # --------------------------------------------------------------------------
 # ThingSpeak helper (direct HTTPS via requests)
@@ -167,19 +135,14 @@ def upload_thingspeak():
 # Emergency entry (SRS 2.3.3)
 # --------------------------------------------------------------------------
 def activate_emergency():
-    """Emergency response actions on fire detection."""
+    """Emergency response actions on fire detection (SRS 2.3.3)."""
     with state_lock:
         if controller.state is State.EMERGENCY:
             return
         controller.state = State.EMERGENCY
 
-    buzzer.turn_on()
-    led.set_output(1, 1)             # red LED on
-    servo.set_servo_position(90)     # sprinkler sweeps
-    lcd.lcd_clear()
-    lcd.lcd_display_string("FIRE DETECTED!", 1)
-    lcd.lcd_display_string("EVACUATE NOW", 2)
-    send_telegram("Fire detected!")
+    # Vishal's emergency_response() -> buzzer + red LED + LCD + Telegram + sprinkler
+    emergency_response(lcd)
 
 
 # --------------------------------------------------------------------------
@@ -216,14 +179,12 @@ def monitor_thread_fn():
 
 
 # --------------------------------------------------------------------------
-# Thread: Telegram manual command ("995")
+# Thread: Telegram manual command ("995") — Harshita's telegram_bot listener
 # --------------------------------------------------------------------------
 def telegram_thread_fn():
-    while True:
-        if get_telegram_manual_command():
-            print("[telegram] manual '995' -> emergency")
-            activate_emergency()
-        time.sleep(TELEGRAM_POLL_SECONDS)
+    # start_command_listener runs poll_for_commands in its own daemon thread;
+    # we just need it started once. on_995_received -> activate_emergency().
+    start_command_listener(lambda: activate_emergency())
 
 
 # --------------------------------------------------------------------------

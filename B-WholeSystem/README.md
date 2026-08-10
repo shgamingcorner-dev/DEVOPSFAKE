@@ -19,8 +19,11 @@ Emergency ──(keypad "123")──> Awake                (false alarm)
 | File | Purpose |
 |---|---|
 | `main.py` | Threaded whole-system app (states, sensors, outputs, relay hooks) |
-| `fire_alarm.py` | Recovery + false-alarm logic (shared with folder A) |
+| `fire_alarm.py` | Recovery + false-alarm logic (my part) |
+| `emergency_response.py` | Emergency response actions (Vishal's part — buzzer/LED/servo/LCD/Telegram) |
+| `telegram_bot.py` | Telegram integration (Harshita's part — REQ-07 alerts to owner/caregiver/SCDF, REQ-04 '995') |
 | `test_fire_alarm.py` | 20 tests for the exit paths |
+| `test_hardware.py` | Hardware walkthrough script (SRS-driven) |
 | `hal/` | Hardware Abstraction Layer (RPi.GPIO) |
 | `PLAN.md` | Implementation plan for the whole system |
 

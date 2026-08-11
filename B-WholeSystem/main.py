@@ -164,6 +164,7 @@ def activate_emergency():
         if controller.state is State.EMERGENCY:
             return
         controller.state = State.EMERGENCY
+        set_alarm_start()   # REQ-17: start alarm duration timer
 
     # Vishal's emergency_response() -> buzzer + red LED + LCD + Telegram + sprinkler
     emergency_response(lcd)
@@ -221,6 +222,39 @@ def telegram_thread_fn():
 # --------------------------------------------------------------------------
 # Deactivation via shared controller (recovery or false alarm)
 # --------------------------------------------------------------------------
+alarm_start_time = None   # set when Emergency begins (for REQ-17 alarm duration)
+
+
+def set_alarm_start():
+    """Record when the Emergency state began (for REQ-17 alarm duration)."""
+    global alarm_start_time
+    if alarm_start_time is None:
+        alarm_start_time = time.time()
+
+
+def upload_alarm_log():
+    """
+    REQ-17: on deactivation, upload alarm duration + recorded temperature
+    to ThingSpeak (fields 4 = duration seconds, 5 = temperature at deactivation).
+    """
+    global alarm_start_time
+    duration = 0
+    if alarm_start_time is not None:
+        duration = round(time.time() - alarm_start_time, 1)
+    temp, _h = read_temp_humidity_with_retry()
+    payload = {
+        "api_key": THINGSPEAK_API_KEY,
+        "field4": duration,
+        "field5": temp,
+    }
+    print(f"[thingspeak] alarm log: {payload}")
+    try:
+        requests.post(THINGSPEAK_URL, data=payload, timeout=5)
+    except Exception as e:
+        print(f"[thingspeak] alarm log failed (offline?): {e}")
+    alarm_start_time = None   # reset for next alarm
+
+
 def deactivate_via_controller(reason):
     outputs = {
         "buzzer_off": buzzer.turn_off,
@@ -231,8 +265,8 @@ def deactivate_via_controller(reason):
         "lcd_line2": lambda t: lcd.lcd_display_string(t, 2),
     }
     controller.deactivate_emergency(outputs, reason)
-    # log alarm duration/temp to ThingSpeak (SRS 2.3.6)
-    upload_thingspeak()
+    # REQ-17: log alarm duration/temp to ThingSpeak
+    upload_alarm_log()
     print(f"[main] deactivated: {reason}")
 
 

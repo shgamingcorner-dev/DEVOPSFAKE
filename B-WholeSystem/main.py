@@ -246,7 +246,7 @@ def main():
 
     lcd = LCD.lcd()
     lcd.lcd_clear()
-    lcd.lcd_display_string("System ready :)", 1)   # SRS REQ-02
+    lcd.lcd_display_string("System asleep", 1)   # SRS REQ-01: starts in Sleep
 
     controller = FireAlarmController(
         read_temperature=lambda: read_temp_humidity_with_retry()[0],

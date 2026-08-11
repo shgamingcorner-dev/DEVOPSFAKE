@@ -121,11 +121,25 @@ def keypad_thread_fn():
 # 
 
 # --------------------------------------------------------------------------
+# Sensor read helper: DHT11 fails intermittently (-100). Retry a few times.
+# --------------------------------------------------------------------------
+def read_temp_humidity_with_retry(retries=3, delay=0.5):
+    """Read temp/humidity, retrying on the HAL's -100 failure sentinel."""
+    for attempt in range(retries):
+        temp, hum = temp_humid_sensor.read_temp_humidity()
+        if temp != -100 and hum != -100:
+            return temp, hum
+        time.sleep(delay)
+    # last resort: return whatever we have (may still be -100)
+    return temp, hum
+
+
+# --------------------------------------------------------------------------
 # ThingSpeak helper (direct HTTPS via requests)
 # --------------------------------------------------------------------------
 def upload_thingspeak():
     """Upload sensor readings to ThingSpeak (SRS 2.4.2)."""
-    temp, _h = temp_humid_sensor.read_temp_humidity()
+    temp, _h = read_temp_humidity_with_retry()
     moisture = moisture_sensor.read_sensor()
     ldr = adc.get_adc_value(0)
     payload = {
@@ -161,7 +175,7 @@ def activate_emergency():
 def monitor_thread_fn():
     global last_thingspeak_upload
     while True:
-        temp, _h = temp_humid_sensor.read_temp_humidity()
+        temp, _h = read_temp_humidity_with_retry()
         ldr = adc.get_adc_value(0)
         moisture = moisture_sensor.read_sensor()
 
@@ -235,7 +249,7 @@ def main():
     lcd.lcd_display_string("System ready :)", 1)   # SRS REQ-02
 
     controller = FireAlarmController(
-        read_temperature=lambda: temp_humid_sensor.read_temp_humidity()[0],
+        read_temperature=lambda: read_temp_humidity_with_retry()[0],
         read_moisture=moisture_sensor.read_sensor,
         get_time=time.time,
         state=State.SLEEP,   # SRS REQ-01: starts in Sleep until slide switch right

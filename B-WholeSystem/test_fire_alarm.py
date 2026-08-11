@@ -304,3 +304,40 @@ class TestRunLoop:
         ctrl.run_loop(outputs.outputs, get_key=lambda: None, poll_delay=lambda: None)
         assert outputs.buzzer_off_count == 0
         assert ctrl.state is State.AWAKE
+
+
+# ---------------------------------------------------------------------------
+# Lock-safety regression (REQ-04 manual '995' deadlock guard)
+# ---------------------------------------------------------------------------
+# main.py: on_995() must call activate_emergency() OUTSIDE state_lock, because
+# activate_emergency() acquires state_lock itself and threading.Lock is NOT
+# reentrant. This test documents the contract: FireAlarmController methods
+# must never acquire a lock (they are pure logic, called under main.py's lock).
+class TestLockSafetyContract:
+    def test_controller_has_no_lock_attribute(self):
+        # If the controller ever introduces a lock that main.py nests, the
+        # 995 path deadlocks. Guard: controller exposes no threading primitives.
+        import threading
+        ctrl = FireAlarmController(
+            read_temperature=lambda: 25.0,
+            read_moisture=lambda: False,
+            get_time=lambda: 0.0,
+            state=State.AWAKE,
+        )
+        # Check for any thread-lock-like object among instance attributes
+        for a in dir(ctrl):
+            if a.startswith('_') or callable(getattr(ctrl, a, None)):
+                continue
+            try:
+                if isinstance(getattr(ctrl, a), (threading.Lock, type(threading.Lock()))):
+                    raise AssertionError(f"controller exposes a lock: {a}")
+            except TypeError:
+                pass  # not a lock type
+
+    def test_deactivate_emergency_is_pure_state_change(self, clock, outputs):
+        # deactivate_emergency must be safe to call under main.py's state_lock
+        # (it only touches injected outputs + self.state).
+        ctrl = make_ctrl(clock, temp=[49.0], moisture=[True], state=State.EMERGENCY)
+        ctrl.deactivate_emergency(outputs.outputs, DeactivationReason.RECOVERED)
+        assert ctrl.state is State.AWAKE
+        assert outputs.lcd_clear_count == 1

@@ -214,6 +214,54 @@ class TestKeypad:
 
 
 # ---------------------------------------------------------------------------
+# Rolling buffer + LCD feedback (new behavior)
+# ---------------------------------------------------------------------------
+class TestRollingBuffer:
+    def test_fourth_key_pushes_oldest_out(self, clock):
+        # buffer holds 3; pressing a 4th key drops the oldest so the
+        # display resets to just the newest key
+        ctrl = make_ctrl(clock, temp=[49.0], moisture=[True])
+        ctrl.key_pressed(5)
+        ctrl.key_pressed(9)
+        ctrl.key_pressed(7)
+        # after 3 keys buffer is [5,9,7]
+        assert ctrl.key_pressed(2) is False  # buffer now [9,7,2]
+        disp = ctrl.keypad_display(now=clock.now())
+        assert disp == "Enter 123: 972"  # only the last 3
+
+    def test_self_heals_after_wrong_key(self, clock):
+        ctrl = make_ctrl(clock, temp=[49.0], moisture=[True])
+        ctrl.key_pressed(1)
+        ctrl.key_pressed(9)   # wrong key - buffer [1,9]
+        ctrl.key_pressed(2)   # [9,2] - still not 1,2,3
+        ctrl.key_pressed(3)   # [2,3] - no match
+        assert ctrl.key_pressed(1) is False  # [3,1]
+        assert ctrl.key_pressed(2) is False  # [1,2]
+        assert ctrl.key_pressed(3) is True   # [1,2,3] -> match!
+
+    def test_idle_reset_returns_none(self, clock):
+        ctrl = make_ctrl(clock, temp=[49.0], moisture=[True])
+        ctrl.key_pressed(1)
+        ctrl.key_pressed(2)
+        # 6 s later (no new press) -> None (LCD reverts)
+        clock.advance(6)
+        assert ctrl.keypad_display(now=clock.now()) is None
+
+    def test_no_keys_returns_none(self, clock):
+        ctrl = make_ctrl(clock, temp=[49.0], moisture=[True])
+        assert ctrl.keypad_display(now=clock.now()) is None
+
+    def test_display_shows_typed_keys(self, clock):
+        ctrl = make_ctrl(clock, temp=[49.0], moisture=[True])
+        ctrl.key_pressed(1)
+        ctrl.key_pressed(2)
+        assert ctrl.keypad_display(now=clock.now()) == "Enter 123: 12"
+        # pressing 3 completes the code -> match -> buffer reset -> None
+        assert ctrl.key_pressed(3) is True
+        assert ctrl.keypad_display(now=clock.now()) is None
+
+
+# ---------------------------------------------------------------------------
 # deactivate_emergency
 # ---------------------------------------------------------------------------
 class TestDeactivate:

@@ -58,7 +58,8 @@ from fire_alarm import (
 #   - telegram_bot.py     (Harshita) REQ-07 multi-recipient + REQ-04 '995'
 #   - emergency_response.py (Vishal) REQ-06/07/LED/servo/LCD emergency actions
 from telegram_bot import send_emergency_alert, start_command_listener
-from emergency_response import emergency_response, reset_system, stop_emergency_outputs
+from emergency_response import (emergency_response, reset_system,
+                                stop_emergency_outputs, display_emergency_message)
 
 # --------------------------------------------------------------------------
 # Environment variables (from .env - see .env.example)
@@ -100,6 +101,9 @@ last_thingspeak_upload = time.time()
 
 # LCD instance (set in main()); module-level so deactivation can use it
 lcd = None
+
+# True while the LCD is showing the keypad entry buffer (for idle revert)
+_keypad_lcd_active = False
 
 # --------------------------------------------------------------------------
 # HAL callback
@@ -334,17 +338,35 @@ def main():
 
         # process keypad (false alarm '123' while in Emergency)
         # drain ALL queued keys this cycle so fast presses aren't dropped
+        key_pressed_this_cycle = False
         while True:
             try:
                 key = key_queue.get_nowait()
             except queue.Empty:
                 break
+            key_pressed_this_cycle = True
             with state_lock:
                 st = controller.state
             if st is State.EMERGENCY:
                 if controller.key_pressed(key):
                     deactivate_via_controller(DeactivationReason.FALSE_ALARM)
                     break  # deactivated, stop processing this batch
+
+        # LCD feedback: while in Emergency, show the last typed keys (with a
+        # 5 s idle reset back to the normal emergency message).
+        global _keypad_lcd_active
+        with state_lock:
+            st = controller.state
+        if st is State.EMERGENCY:
+            display = controller.keypad_display()
+            if display is not None:
+                lcd.lcd_clear()
+                lcd.lcd_display_string(display, 1)
+                _keypad_lcd_active = True
+            elif _keypad_lcd_active:
+                # idle timeout -> back to the normal emergency message
+                display_emergency_message(lcd)
+                _keypad_lcd_active = False
 
         time.sleep(0.1)
 

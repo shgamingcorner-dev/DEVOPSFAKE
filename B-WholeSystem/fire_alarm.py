@@ -33,6 +33,7 @@ RECOVERY_TEMP_C = 50.0          # SRS 2.3.4: temp must drop below 50 C
 RECOVERY_MIN_SECONDS = 5.0      # NFR: conditions must hold >= 5 s continuously
 SAMPLE_PERIOD_SECONDS = 1.0     # sensor polling period
 KEYPAD_DEACTIVATE_CODE = (1, 2, 3)   # SRS 2.3.5: keypad '123'
+KEYPAD_IDLE_RESET_SECONDS = 5.0      # LCD shows typed keys; reverts after this idle
 
 # Servo "sprinkler" rest position (degrees). Entry logic sweeps the servo;
 # recovery/false-alarm stops it back at rest.
@@ -83,9 +84,10 @@ class FireAlarmController:
         # 5 s debounce bookkeeping
         self._sustained_since = None
 
-        # keypad "123" sequence buffer
+        # keypad "123" rolling buffer (last N keys; wrong key self-heals)
         self._seq = []
         self._seq_len = len(KEYPAD_DEACTIVATE_CODE)
+        self._seq_last_key_time = None
 
     # ------------------------------------------------------------------
     # Continuous monitoring / auto-recovery
@@ -115,27 +117,49 @@ class FireAlarmController:
         return False
 
     # ------------------------------------------------------------------
-    # Keypad "123" sequence
+    # Keypad "123" sequence (rolling buffer with idle reset + LCD feedback)
     # ------------------------------------------------------------------
     def key_pressed(self, key):
         """
-        Feed a keypad press into the sequence buffer.
+        Feed a keypad press into a ROLLING buffer of the last N keys.
 
-        Returns True when the full deactivation code has been entered
-        in order (resets the buffer in that case).
+        - If the buffer already has N keys, a new press pushes the oldest
+          out (so pressing a 4th key resets the display to just that key).
+        - The buffer self-heals: a wrong key in the middle is simply
+          shifted out by later presses - no stuck state.
+        - Returns True when the last N keys equal KEYPAD_DEACTIVATE_CODE.
+        - Each press refreshes the idle timer (see keypad_display()).
         """
-        expected = KEYPAD_DEACTIVATE_CODE[len(self._seq)]
-        if key == expected:
-            self._seq.append(key)
-            if len(self._seq) == self._seq_len:
-                self._seq = []
+        self._seq_last_key_time = self._now()
+        self._seq.append(key)
+        if len(self._seq) > self._seq_len:
+            self._seq.pop(0)            # rolling: drop the oldest
+        if len(self._seq) == self._seq_len:
+            if tuple(self._seq) == KEYPAD_DEACTIVATE_CODE:
+                self._seq = []          # matched -> reset buffer
                 return True
-        else:
-            # wrong key -> restart sequence
-            self._seq = []
-            if key == KEYPAD_DEACTIVATE_CODE[0]:
-                self._seq.append(key)
         return False
+
+    def keypad_display(self, now=None):
+        """
+        Return the LCD text to show for the keypad buffer, or None if the
+        LCD should revert to the normal emergency message.
+
+        Rules:
+          - Shows the last pressed keys (e.g. "Enter 123: 12").
+          - After KEYPAD_IDLE_RESET_SECONDS without a press, returns None
+            so the LCD goes back to the normal message.
+        """
+        if not self._seq:
+            return None
+        if now is None:
+            now = self._now()
+        if self._seq_last_key_time is None:
+            return None
+        if now - self._seq_last_key_time > KEYPAD_IDLE_RESET_SECONDS:
+            return None
+        typed = "".join(str(k) for k in self._seq)
+        return f"Enter {''.join(str(k) for k in KEYPAD_DEACTIVATE_CODE)}: {typed}"
 
     # ------------------------------------------------------------------
     # Deactivation (shared exit helper for both paths)

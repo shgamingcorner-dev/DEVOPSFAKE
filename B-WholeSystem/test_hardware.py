@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-test_hardware.py — Smart Fire Alert hardware verification (SRS-driven)
+test_hardware.py - Smart Fire Alert hardware verification (SRS-driven)
 
 Runs on the Raspberry Pi to prove each SRS requirement on real hardware.
-It walks you through physical scenarios and records PASS/FAIL — use the
+It walks you through physical scenarios and records PASS/FAIL - use the
 printed summary as evidence for the System Test Report.
 
 Usage (on the Pi):
@@ -11,7 +11,7 @@ Usage (on the Pi):
     cp .env.example .env          # fill in real Telegram / ThingSpeak keys
     sudo python3 test_hardware.py
 
-Optional dev mode (Windows, no hardware) — checks the script flow only:
+Optional dev mode (Windows, no hardware) - checks the script flow only:
     python test_hardware.py --dry-run
 
 SRS coverage map:
@@ -201,16 +201,16 @@ def setup_system():
     # warn about placeholder keys
     import telegram_bot as tb
     if tb.BOT_TOKEN in ("", "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"):
-        print("WARNING: TELEGRAM_BOT_TOKEN looks unset/placeholder — edit B-WholeSystem/.env")
+        print("WARNING: TELEGRAM_BOT_TOKEN looks unset/placeholder - edit B-WholeSystem/.env")
     if app.THINGSPEAK_API_KEY in ("", "XXXXXXXXXXXXXXXX"):
-        print("WARNING: THINGSPEAK_API_KEY looks unset/placeholder — edit B-WholeSystem/.env")
+        print("WARNING: THINGSPEAK_API_KEY looks unset/placeholder - edit B-WholeSystem/.env")
 
 
 # --------------------------------------------------------------------------
 # Tests
 # --------------------------------------------------------------------------
 def test_01_startup_lcd():
-    banner("1. System startup + LCD (SRS 2.3.1 — REQ-01/02)")
+    banner("1. System startup + LCD (SRS 2.3.1 - REQ-01/02)")
     print("  Slide the switch to the RIGHT (Awake).")
     pause("  ...slide it now, then press Enter")
     on = app.input_switch.read_slide_switch()
@@ -234,21 +234,21 @@ def test_02_sensor_reads():
 
 
 def test_03_auto_activation():
-    banner("3. Auto activation (SRS 2.3.2 — REQ-03)")
+    banner("3. Auto activation (SRS 2.3.2 - REQ-03)")
     print("  Trigger the fire: heat the temp sensor above 60 C, OR cover the LDR.")
     pause("  ...trigger it now, then press Enter")
     elapsed = wait_for_state(app.State.EMERGENCY, timeout=30, note="(auto fire detection)")
     record("REQ-03", "System enters Emergency automatically (temp>=60C or LDR smoke)",
            elapsed is not None)
     if elapsed is None:
-        print("  Not detected in 30s — check sensor wiring / thresholds.")
+        print("  Not detected in 30s - check sensor wiring / thresholds.")
 
 
 def test_04_emergency_response():
     banner("4. Emergency response (SRS 2.3.3)")
     with app.state_lock:
         if app.controller.state is not app.State.EMERGENCY:
-            print("  System not in Emergency — activating directly for this test.")
+            print("  System not in Emergency - activating directly for this test.")
             app.activate_emergency()
     record("REQ-06", "Buzzer is sounding", ask("  Is the buzzer sounding?"))
     record("REQ-07", "Telegram 'Fire detected!' received", ask("  Did 'Fire detected!' arrive on Telegram?"))
@@ -259,7 +259,7 @@ def test_04_emergency_response():
 
 
 def test_05_recovery():
-    banner("5. System recovery (SRS 2.3.4 — 5 s debounce NFR)")
+    banner("5. System recovery (SRS 2.3.4 - 5 s debounce NFR)")
     print("  Put the fire out: cool the sensor below 50 C AND wet the moisture sensor.")
     print("  (Both conditions must hold for ~5 seconds.)")
     pause("  ...cool + wet it now, then press Enter")
@@ -273,7 +273,7 @@ def test_05_recovery():
 
 
 def test_06_false_alarm():
-    banner("6. False alarm (SRS 2.3.5 — keypad '123')")
+    banner("6. False alarm (SRS 2.3.5 - keypad '123')")
     with app.state_lock:
         if app.controller.state is not app.State.EMERGENCY:
             print("  Re-trigger the fire (heat/cover LDR) to enter Emergency again.")
@@ -297,12 +297,12 @@ def test_06_false_alarm():
 
 
 def test_07_manual_995():
-    banner("7. Manual activation via Telegram (SRS 2.3.2 — REQ-04)")
+    banner("7. Manual activation via Telegram (SRS 2.3.2 - REQ-04)")
     print("  Make sure the fire source is removed (system should be Awake).")
     pause("  ...press Enter when it is normal")
     with app.state_lock:
         if app.controller.state is app.State.EMERGENCY:
-            print("  Still in Emergency — press 1-2-3 on the keypad to clear it first.")
+            print("  Still in Emergency - press 1-2-3 on the keypad to clear it first.")
             pause("  ...press Enter when cleared")
     print("  Now send the message '995' to your Telegram bot from your phone.")
     pause("  ...sent it, then press Enter")
@@ -340,7 +340,7 @@ def print_summary():
 # Main
 # --------------------------------------------------------------------------
 def main():
-    print("Smart Fire Alert — hardware verification")
+    print("Smart Fire Alert - hardware verification")
     print("Make sure the Raspberry Pi is wired and the system is powered.")
     setup_system()
     pause("\nPress Enter to start the tests...")

@@ -1,13 +1,13 @@
 """
-Smart Fire Alert System — Whole System (full SRS implementation).
+Smart Fire Alert System - Whole System (full SRS implementation).
 
 Implements the complete state machine from the SRS:
 
-    Sleep ──(slide switch right)──> Awake
-    Awake ──(auto: temp>=60C OR LDR smoke)──> Emergency
-    Awake ──(Telegram "995")──> Emergency            (manual)
-    Emergency ──(temp<50C AND moisture, 5s)──> Awake (auto recovery)
-    Emergency ──(keypad "123")──> Awake              (false alarm)
+    Sleep ->(slide switch right)->> Awake
+    Awake ->(auto: temp>=60C OR LDR smoke)->> Emergency
+    Awake ->(Telegram "995")->> Emergency            (manual)
+    Emergency ->(temp<50C AND moisture, 5s)->> Awake (auto recovery)
+    Emergency ->(keypad "123")->> Awake              (false alarm)
 
 Threading model:
   - keypad_thread   : HAL keypad scanner -> key queue
@@ -19,7 +19,7 @@ Threading model:
 Recovery + False Alarm logic is in fire_alarm.py (shared with folder A).
 HAL modules are RPi.GPIO based (Raspberry Pi).
 
-Networking uses the `requests` library directly (no relay needed — the Pi can
+Networking uses the `requests` library directly (no relay needed - the Pi can
 call HTTPS endpoints itself).
 """
 
@@ -61,7 +61,7 @@ from telegram_bot import send_emergency_alert, start_command_listener
 from emergency_response import emergency_response, reset_system
 
 # --------------------------------------------------------------------------
-# Environment variables (from .env — see .env.example)
+# Environment variables (from .env - see .env.example)
 # --------------------------------------------------------------------------
 load_dotenv()  # reads B-WholeSystem/.env when running from this folder
 
@@ -73,7 +73,7 @@ SAMPLE_PERIOD_SECONDS = 1.0
 
 # Telegram credentials are read by telegram_bot.py from .env
 # (TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_CHAT_ID, TELEGRAM_CAREGIVER_CHAT_ID,
-#  TELEGRAM_SCDF_CHAT_ID) — see .env.example
+#  TELEGRAM_SCDF_CHAT_ID) - see .env.example
 
 # ThingSpeak (direct from the Pi)
 THINGSPEAK_API_KEY = os.getenv("THINGSPEAK_API_KEY", "")
@@ -103,7 +103,7 @@ def keypad_thread_fn():
 
 
 # --------------------------------------------------------------------------
-# Telegram helpers (Harshita's telegram_bot.py — REQ-04 '995' + REQ-07 alerts)
+# Telegram helpers (Harshita's telegram_bot.py - REQ-04 '995' + REQ-07 alerts)
 # --------------------------------------------------------------------------
 # send_emergency_alert() -> sends to owner/caregiver/SCDF (REQ-07)
 # start_command_listener(on_995_received) -> polls '995' (REQ-04)
@@ -179,7 +179,7 @@ def monitor_thread_fn():
 
 
 # --------------------------------------------------------------------------
-# Thread: Telegram manual command ("995") — Harshita's telegram_bot listener
+# Thread: Telegram manual command ("995") - Harshita's telegram_bot listener
 # --------------------------------------------------------------------------
 def telegram_thread_fn():
     # start_command_listener runs poll_for_commands in its own daemon thread;
@@ -237,7 +237,7 @@ def main():
     threading.Thread(target=monitor_thread_fn, daemon=True).start()
     threading.Thread(target=telegram_thread_fn, daemon=True).start()
 
-    print("Smart Fire Alert — whole system")
+    print("Smart Fire Alert - whole system")
     print("Sleep -> Awake via slide switch; auto/manual activation; recovery + false alarm.")
 
     while True:

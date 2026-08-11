@@ -1,5 +1,5 @@
 """
-Tests for src/fire_alarm.py — System Recovery + False Alarm (SRS 2.3.4/2.3.5).
+Tests for src/fire_alarm.py - System Recovery + False Alarm (SRS 2.3.4/2.3.5).
 
 Run from repo root:
     .venv/Scripts/python -m pytest src/test_fire_alarm.py -v

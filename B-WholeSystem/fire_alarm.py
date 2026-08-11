@@ -1,5 +1,5 @@
 """
-Smart Fire Alert System — System Recovery + False Alarm logic (SRS 2.3.4 / 2.3.5).
+Smart Fire Alert System - System Recovery + False Alarm logic (SRS 2.3.4 / 2.3.5).
 
 Owns the Emergency -> Awake exit paths of the state machine:
 

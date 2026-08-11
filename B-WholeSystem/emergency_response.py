@@ -2,7 +2,7 @@
 Emergency response actions (SRS 2.3.3).
 
 Adapted from Vishal's branch (vishals_part) with the missing Telegram wiring
-fixed: `send_telegram_alert()` was an empty body — it now calls Harshita's
+fixed: `send_telegram_alert()` was an empty body - it now calls Harshita's
 `telegram_bot.send_emergency_alert()` so REQ-07 (notify owner/caregiver/SCDF)
 actually works.
 

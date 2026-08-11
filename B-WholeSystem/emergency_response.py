@@ -7,14 +7,16 @@ fixed: `send_telegram_alert()` was an empty body - it now calls Harshita's
 actually works.
 
 REQ coverage:
-  REQ-06: activate_buzzer()
-  REQ-07: send_telegram_alert()          -> telegram_bot.send_emergency_alert()
-  REQ-0?: turn_on_red_led() / turn_off_red_led()
-  REQ-0?: activate_sprinkler()
-  REQ-0?: display_emergency_message(lcd)
+  REQ-06: activate_buzzer()          (continuous beep until stop_emergency_outputs)
+  REQ-07: send_telegram_alert()      -> telegram_bot.send_emergency_alert()
+  REQ-08: turn_on_red_led() / turn_off_red_led()
+  REQ-09: activate_sprinkler()       (servo opens, returns immediately)
+  REQ-10: display_emergency_message(lcd)
   orchestration: emergency_response(lcd)
+  deactivation: stop_emergency_outputs()
 """
 
+import threading
 import time
 
 from hal import hal_led as led
@@ -31,6 +33,23 @@ from telegram_bot import send_emergency_alert
 RED_LED_CHANNEL = 1          # channel passed to led.set_output(channel, state)
 SPRINKLER_SERVO_ANGLE = 90   # degrees, sprinkler "open" position
 SERVO_RESET_ANGLE = 0        # degrees, sprinkler "closed" position
+BUZZER_BEEP_SECONDS = 0.5    # on/off time for the continuous beep pattern
+
+
+# ---------------------------------------------------------------------------
+# Continuous buzzer (non-blocking background thread)
+# ---------------------------------------------------------------------------
+
+_buzzer_stop = threading.Event()
+
+
+def _buzzer_loop():
+    """Keep beeping until stop_emergency_outputs() sets the stop event."""
+    while not _buzzer_stop.is_set():
+        buzzer.turn_on()
+        time.sleep(BUZZER_BEEP_SECONDS)
+        buzzer.turn_off()
+        time.sleep(BUZZER_BEEP_SECONDS)
 
 
 # ---------------------------------------------------------------------------
@@ -38,9 +57,10 @@ SERVO_RESET_ANGLE = 0        # degrees, sprinkler "closed" position
 # ---------------------------------------------------------------------------
 
 def activate_buzzer():
-    """Sound the buzzer to provide an audible emergency alert."""
-    print("REQ-06: Buzzer activated.")
-    buzzer.beep(0.5, 0.5, 5)  # on_time, off_time, repeat
+    """Start the continuous audible emergency alert (non-blocking thread)."""
+    print("REQ-06: Buzzer activated (continuous).")
+    _buzzer_stop.clear()
+    threading.Thread(target=_buzzer_loop, daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -56,13 +76,13 @@ def send_telegram_alert(message="Fire detected!"):
 
 
 # ---------------------------------------------------------------------------
-# REQ-0?: Turn on the red LED
+# REQ-08: Red LED
 # ---------------------------------------------------------------------------
 
 def turn_on_red_led():
     """Turn on the red LED to visually indicate the emergency."""
     led.set_output(RED_LED_CHANNEL, 1)
-    print("REQ-0?: Red LED turned on.")
+    print("REQ-08: Red LED turned on.")
 
 
 def turn_off_red_led():
@@ -72,27 +92,21 @@ def turn_off_red_led():
 
 
 # ---------------------------------------------------------------------------
-# REQ-0?: Activate the servo-driven water sprinkler
+# REQ-09: Servo-driven water sprinkler
 # ---------------------------------------------------------------------------
 
-def activate_sprinkler(run_time=5):
+def activate_sprinkler():
     """
-    Activate the servo motor acting as a water sprinkler to help tame
-    the fire while waiting for SCDF to arrive.
-
-    Args:
-        run_time: how long (in seconds) the sprinkler stays open.
+    Open the servo acting as a water sprinkler to help tame the fire while
+    waiting for SCDF to arrive. Returns immediately (non-blocking) - the
+    servo stays open until stop_emergency_outputs() closes it.
     """
     servo.set_servo_position(SPRINKLER_SERVO_ANGLE)
-    print("REQ-0?: Sprinkler servo opened.")
-    time.sleep(run_time)
-
-    servo.set_servo_position(SERVO_RESET_ANGLE)
-    print("Sprinkler servo closed.")
+    print("REQ-09: Sprinkler servo opened.")
 
 
 # ---------------------------------------------------------------------------
-# REQ-0?: LCD emergency message
+# REQ-10: LCD emergency message
 # ---------------------------------------------------------------------------
 
 def display_emergency_message(lcd):
@@ -107,7 +121,7 @@ def display_emergency_message(lcd):
     lcd.lcd_clear()
     lcd.lcd_display_string("FIRE DETECTED!", 1)
     lcd.lcd_display_string("EVACUATE NOW", 2)
-    print("REQ-0?: LCD displaying emergency message.")
+    print("REQ-10: LCD displaying emergency message.")
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +134,8 @@ def emergency_response(lcd):
 
     Call this when either automatic activation (REQ-03: temperature
     >= 60C or LDR detects smoke) or manual activation (REQ-04: "995"
-    command via Telegram) is triggered.
+    command via Telegram) is triggered. All outputs stay on until
+    stop_emergency_outputs() is called (on recovery or false alarm).
     """
     print("Emergency response state entered.")
     activate_buzzer()
@@ -130,8 +145,24 @@ def emergency_response(lcd):
     activate_sprinkler()
 
 
+# ---------------------------------------------------------------------------
+# Deactivation - stop all emergency outputs
+# ---------------------------------------------------------------------------
+
+def stop_emergency_outputs():
+    """
+    Stop the continuous buzzer, turn off the red LED and close the sprinkler.
+    Call this when the system exits Emergency (recovery or false alarm).
+    """
+    _buzzer_stop.set()
+    buzzer.turn_off()
+    turn_off_red_led()
+    servo.set_servo_position(SERVO_RESET_ANGLE)
+    print("Emergency outputs stopped.")
+
+
 def reset_system(lcd):
     """Reset outputs after the emergency has been handled."""
-    turn_off_red_led()
+    stop_emergency_outputs()
     lcd.lcd_clear()
     print("System reset to normal state.")

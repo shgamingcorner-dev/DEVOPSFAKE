@@ -58,7 +58,7 @@ from fire_alarm import (
 #   - telegram_bot.py     (Harshita) REQ-07 multi-recipient + REQ-04 '995'
 #   - emergency_response.py (Vishal) REQ-06/07/LED/servo/LCD emergency actions
 from telegram_bot import send_emergency_alert, start_command_listener
-from emergency_response import emergency_response, reset_system
+from emergency_response import emergency_response, reset_system, stop_emergency_outputs
 
 # --------------------------------------------------------------------------
 # Environment variables (from .env - see .env.example)
@@ -257,6 +257,8 @@ def upload_alarm_log():
 
 def deactivate_via_controller(reason):
     outputs = {
+        # physical outputs are stopped by emergency_response.stop_emergency_outputs();
+        # the controller only needs the LCD messages here.
         "buzzer_off": buzzer.turn_off,
         "led_off": lambda: led.set_output(1, 0),
         "servo_rest": lambda: servo.set_servo_position(0),
@@ -265,6 +267,8 @@ def deactivate_via_controller(reason):
         "lcd_line2": lambda t: lcd.lcd_display_string(t, 2),
     }
     controller.deactivate_emergency(outputs, reason)
+    # stop the continuous buzzer + sprinkler from the background thread
+    stop_emergency_outputs()
     # REQ-17: log alarm duration/temp to ThingSpeak
     upload_alarm_log()
     print(f"[main] deactivated: {reason}")
@@ -306,13 +310,20 @@ def main():
     print("Sleep -> Awake via slide switch; auto/manual activation; recovery + false alarm.")
 
     while True:
-        # Sleep state: wait for slide switch (SRS REQ-01)
+        # Slide switch: left = Sleep, right = Awake (checked continuously)
         with state_lock:
-            if controller.state is State.SLEEP:
-                if input_switch.read_slide_switch():
-                    controller.state = State.AWAKE
-                    lcd.lcd_clear()
-                    lcd.lcd_display_string("System ready :)", 1)
+            st = controller.state
+            sw = input_switch.read_slide_switch()
+            if st is State.SLEEP and sw:
+                controller.state = State.AWAKE
+                lcd.lcd_clear()
+                lcd.lcd_display_string("System ready :)", 1)
+                print("[main] slide switch -> Awake")
+            elif st is State.AWAKE and not sw:
+                controller.state = State.SLEEP
+                lcd.lcd_clear()
+                lcd.lcd_display_string("System asleep", 1)
+                print("[main] slide switch -> Sleep")
 
         # process keypad (false alarm '123' while in Emergency)
         try:

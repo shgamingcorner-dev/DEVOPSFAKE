@@ -333,17 +333,18 @@ def main():
                 print("[main] slide switch -> Sleep")
 
         # process keypad (false alarm '123' while in Emergency)
-        try:
-            key = key_queue.get_nowait()
-        except queue.Empty:
-            key = None
-
-        if key is not None:
+        # drain ALL queued keys this cycle so fast presses aren't dropped
+        while True:
+            try:
+                key = key_queue.get_nowait()
+            except queue.Empty:
+                break
             with state_lock:
                 st = controller.state
             if st is State.EMERGENCY:
                 if controller.key_pressed(key):
                     deactivate_via_controller(DeactivationReason.FALSE_ALARM)
+                    break  # deactivated, stop processing this batch
 
         time.sleep(0.1)
 

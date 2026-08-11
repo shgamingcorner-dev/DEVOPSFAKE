@@ -207,8 +207,15 @@ def monitor_thread_fn():
 # --------------------------------------------------------------------------
 def telegram_thread_fn():
     # start_command_listener runs poll_for_commands in its own daemon thread;
-    # we just need it started once. on_995_received -> activate_emergency().
-    start_command_listener(lambda: activate_emergency())
+    # only trigger '995' when the system is Awake (not in Sleep).
+    def on_995():
+        with state_lock:
+            if controller.state is State.AWAKE:
+                print("[telegram] manual '995' -> emergency")
+                activate_emergency()
+            else:
+                print("[telegram] '995' ignored (system not Awake)")
+    start_command_listener(on_995)
 
 
 # --------------------------------------------------------------------------

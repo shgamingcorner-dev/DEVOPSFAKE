@@ -22,7 +22,14 @@ I2CBUS = 1
 ADDRESS = 0x27
 
 import smbus
+import threading
 from time import sleep
+
+# The LCD is a shared I2C device. Multiple threads (monitor, main loop,
+# emergency response) write to it concurrently; without a lock their byte
+# sequences interleave on the I2C bus and the LCD shows gibberish. Serialize
+# every low-level write.
+_lcd_lock = threading.Lock()
 
 
 class i2c_device:
@@ -145,24 +152,26 @@ class lcd:
 
     # put string function with optional char positioning
     def lcd_display_string(self, string, line=1, pos=0):
-        if line == 1:
-            pos_new = pos
-        elif line == 2:
-            pos_new = 0x40 + pos
-        elif line == 3:
-            pos_new = 0x14 + pos
-        elif line == 4:
-            pos_new = 0x54 + pos
+        with _lcd_lock:   # serialize whole message: no I2C interleaving
+            if line == 1:
+                pos_new = pos
+            elif line == 2:
+                pos_new = 0x40 + pos
+            elif line == 3:
+                pos_new = 0x14 + pos
+            elif line == 4:
+                pos_new = 0x54 + pos
 
-        self.lcd_write(0x80 + pos_new)
+            self.lcd_write(0x80 + pos_new)
 
-        for char in string:
-            self.lcd_write(ord(char), Rs)
+            for char in string:
+                self.lcd_write(ord(char), Rs)
 
     # clear lcd and set to home
     def lcd_clear(self):
-        self.lcd_write(LCD_CLEARDISPLAY)
-        self.lcd_write(LCD_RETURNHOME)
+        with _lcd_lock:   # serialize with display_string
+            self.lcd_write(LCD_CLEARDISPLAY)
+            self.lcd_write(LCD_RETURNHOME)
 
     # define backlight on/off (lcd.backlight(1); off= lcd.backlight(0)
     def backlight(self, state):  # for state, 1 = on, 0 = off

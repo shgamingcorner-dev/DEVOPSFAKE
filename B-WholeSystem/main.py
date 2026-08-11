@@ -98,6 +98,10 @@ controller = None          # FireAlarmController (recovery + false alarm)
 
 key_queue = queue.Queue()
 last_thingspeak_upload = time.time()
+# Pending REQ-17 alarm log (duration + temp) that couldn't be sent because
+# ThingSpeak's free tier enforces a 15 s minimum between writes. It's
+# flushed on the next sensor upload (every 15 s) so it's never lost.
+_pending_alarm_log = None
 
 # LCD instance (set in main()); module-level so deactivation can use it
 lcd = None
@@ -141,8 +145,44 @@ def read_temp_humidity_with_retry(retries=3, delay=0.5):
 # --------------------------------------------------------------------------
 # ThingSpeak helper (direct HTTPS via requests)
 # --------------------------------------------------------------------------
+def _post_thingspeak(payload):
+    """POST a payload to ThingSpeak, respecting the 15 s free-tier cooldown.
+
+    Returns True if the write went through (or was accepted), False if it
+    was skipped because of the cooldown (caller may queue it).
+    """
+    global last_thingspeak_upload
+    now = time.time()
+    if now - last_thingspeak_upload < 15.0:
+        # still inside ThingSpeak's minimum-write window - would be dropped
+        return False
+    print(f"[thingspeak] post: {payload}")
+    try:
+        requests.post(THINGSPEAK_URL, data=payload, timeout=5)
+        last_thingspeak_upload = now
+        return True
+    except Exception as e:
+        print(f"[thingspeak] post failed (offline?): {e}")
+        # still count the attempt so we don't hammer the API
+        last_thingspeak_upload = now
+        return True  # treat as sent (avoid infinite retry loop)
+
+
+def _flush_pending_alarm_log():
+    """Send any queued REQ-17 alarm log on the next available slot."""
+    global _pending_alarm_log
+    if _pending_alarm_log is None:
+        return
+    if _post_thingspeak(_pending_alarm_log):
+        print("[thingspeak] flushed pending alarm log")
+        _pending_alarm_log = None
+
+
 def upload_thingspeak():
     """Upload sensor readings to ThingSpeak (SRS 2.4.2)."""
+    global _pending_alarm_log
+    # flush a queued alarm log first (it's the higher-priority REQ-17 data)
+    _flush_pending_alarm_log()
     temp, _h = read_temp_humidity_with_retry()
     moisture = moisture_sensor.read_sensor()
     ldr = adc.get_adc_value(0)
@@ -244,9 +284,14 @@ def set_alarm_start():
 def upload_alarm_log():
     """
     REQ-17: on deactivation, upload alarm duration + recorded temperature
-    to ThingSpeak (fields 4 = duration seconds, 5 = temperature at deactivation).
+    to ThingSpeak (fields 4 = duration seconds, 5 = temperature at
+    deactivation).
+
+    If ThingSpeak's 15 s free-tier cooldown is still active, the log is
+    QUEUED (in _pending_alarm_log) and flushed on the next sensor upload
+    (upload_thingspeak) so it is never silently dropped.
     """
-    global alarm_start_time
+    global alarm_start_time, _pending_alarm_log
     duration = 0
     if alarm_start_time is not None:
         duration = round(time.time() - alarm_start_time, 1)
@@ -257,10 +302,10 @@ def upload_alarm_log():
         "field5": temp,
     }
     print(f"[thingspeak] alarm log: {payload}")
-    try:
-        requests.post(THINGSPEAK_URL, data=payload, timeout=5)
-    except Exception as e:
-        print(f"[thingspeak] alarm log failed (offline?): {e}")
+    if not _post_thingspeak(payload):
+        # cooldown active -> queue it; will flush on next 15 s upload
+        _pending_alarm_log = payload
+        print("[thingspeak] alarm log queued (15 s cooldown) - will flush later")
     alarm_start_time = None   # reset for next alarm
 
 

@@ -269,6 +269,8 @@ def deactivate_via_controller(reason):
     # emergency_response.stop_emergency_outputs() AFTER the controller
     # sets state + LCD. The controller's outputs dict only needs the LCD
     # helpers; pass no-op for the physical ones to avoid double-calls.
+    global _keypad_lcd_active
+    _keypad_lcd_active = False
     outputs = {
         "buzzer_off": lambda: None,
         "led_off": lambda: None,
@@ -282,6 +284,20 @@ def deactivate_via_controller(reason):
     stop_emergency_outputs()
     # REQ-17: log alarm duration/temp to ThingSpeak
     upload_alarm_log()
+    # Post-deactivation UX (beyond SRS, for the demo):
+    #   - keep the deactivation message ("Fire is out" / "False alarm!") on
+    #     the LCD for a moment, then show "System ready :)"
+    #   - Telegram status so owner/caregiver/SCDF know the alarm is resolved
+    import time as _t
+    _t.sleep(2.0)   # let the REQ-13/16 message stay visible
+    lcd.lcd_display_string("System ready :)", 1)
+    try:
+        if reason is DeactivationReason.RECOVERED:
+            send_emergency_alert("Fire is out - alarm resolved.")
+        elif reason is DeactivationReason.FALSE_ALARM:
+            send_emergency_alert("False alarm - system reset to normal.")
+    except Exception as e:
+        print(f"[main] Telegram status failed: {e}")
     print(f"[main] deactivated: {reason}")
 
 

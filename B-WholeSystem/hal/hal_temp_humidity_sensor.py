@@ -1,8 +1,15 @@
 import time
+import threading
 
 import RPi.GPIO as GPIO
 
 from . import dht11
+
+# DHT11 is NOT thread-safe: read() toggles the pin between OUTPUT (start
+# signal) and INPUT (data). Two threads reading at once races the pin mode
+# and crashes with "GPIO channel has not been set up as an OUTPUT". Serialize
+# all reads with a lock.
+_read_lock = threading.Lock()
 
 def init():
     GPIO.setmode(GPIO.BCM)
@@ -16,7 +23,8 @@ def read_temp_humidity():
 
     ret = [-100, -100]
 
-    result = dht11_inst.read()
+    with _read_lock:  # serialize DHT11 access across threads
+        result = dht11_inst.read()
 
     if result.is_valid():
         #print("Temperature: %-3.1f C" % result.temperature)

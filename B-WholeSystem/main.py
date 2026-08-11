@@ -213,9 +213,14 @@ def telegram_thread_fn():
         with state_lock:
             if controller.state is State.AWAKE:
                 print("[telegram] manual '995' -> emergency")
-                activate_emergency()
+                should_activate = True
             else:
                 print("[telegram] '995' ignored (system not Awake)")
+                should_activate = False
+        # call activate_emergency() OUTSIDE the lock - it re-acquires the
+        # lock itself (threading.Lock is NOT reentrant -> deadlock if nested)
+        if should_activate:
+            activate_emergency()
     start_command_listener(on_995)
 
 
@@ -256,12 +261,14 @@ def upload_alarm_log():
 
 
 def deactivate_via_controller(reason):
+    # Physical outputs (buzzer/LED/servo) are stopped by
+    # emergency_response.stop_emergency_outputs() AFTER the controller
+    # sets state + LCD. The controller's outputs dict only needs the LCD
+    # helpers; pass no-op for the physical ones to avoid double-calls.
     outputs = {
-        # physical outputs are stopped by emergency_response.stop_emergency_outputs();
-        # the controller only needs the LCD messages here.
-        "buzzer_off": buzzer.turn_off,
-        "led_off": lambda: led.set_output(1, 0),
-        "servo_rest": lambda: servo.set_servo_position(0),
+        "buzzer_off": lambda: None,
+        "led_off": lambda: None,
+        "servo_rest": lambda: None,
         "lcd_clear": lcd.lcd_clear,
         "lcd_line1": lambda t: lcd.lcd_display_string(t, 1),
         "lcd_line2": lambda t: lcd.lcd_display_string(t, 2),

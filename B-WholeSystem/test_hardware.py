@@ -252,9 +252,9 @@ def test_04_emergency_response():
             app.activate_emergency()
     record("REQ-06", "Buzzer is sounding", ask("  Is the buzzer sounding?"))
     record("REQ-07", "Telegram 'Fire detected!' received", ask("  Did 'Fire detected!' arrive on Telegram?"))
-    record("REQ-0?", "Red LED is on", ask("  Is the red LED on?"))
-    record("REQ-0?", "Servo sprinkler is moving", ask("  Is the servo (sprinkler) moving?"))
-    record("REQ-0?", "LCD shows 'FIRE DETECTED!' / 'EVACUATE NOW'",
+    record("REQ-08", "Red LED is on", ask("  Is the red LED on?"))
+    record("REQ-09", "Servo sprinkler is moving", ask("  Is the servo (sprinkler) moving?"))
+    record("REQ-10", "LCD shows 'FIRE DETECTED!' / 'EVACUATE NOW'",
            ask("  Does the LCD show FIRE DETECTED! / EVACUATE NOW?"))
 
 
@@ -289,7 +289,7 @@ def test_06_false_alarm():
         except queue.Empty:
             pass
     print(f"  keypad sequence read: {pressed}")
-    record("REQ-0?", "Keypad '123' deactivates Emergency", pressed == [1, 2, 3])
+    record("REQ-14", "Keypad '123' deactivates Emergency", pressed == [1, 2, 3])
     record("2.3.5", 'LCD shows "False alarm!" / "Alarm deactivated"',
            ask('  Does the LCD show "False alarm!" / "Alarm deactivated"?'))
     with app.state_lock:

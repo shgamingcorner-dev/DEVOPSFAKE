@@ -63,7 +63,17 @@ from emergency_response import emergency_response, reset_system
 # --------------------------------------------------------------------------
 # Environment variables (from .env - see .env.example)
 # --------------------------------------------------------------------------
-load_dotenv()  # reads B-WholeSystem/.env when running from this folder
+# Load by ABSOLUTE path (relative to this file), same as telegram_bot.py,
+# so it works no matter which directory the program is run from.
+from pathlib import Path
+_HERE = Path(__file__).resolve().parent
+load_dotenv(_HERE / ".env")
+
+# Startup diagnostic: print whether secrets loaded (remove for production)
+_api = os.getenv("THINGSPEAK_API_KEY", "")
+_tok = os.getenv("TELEGRAM_BOT_TOKEN", "")
+print(f"[env] ThingSpeak key: {'OK' if _api and not _api.startswith('X'*16) else 'MISSING/placeholder'}")
+print(f"[env] Telegram token: {'OK' if _tok and ':' in _tok and not _tok.startswith('123456789:AAExample') else 'MISSING/placeholder'}")
 
 # SRS constants
 FIRE_TEMP_C = 60.0            # SRS 2.3.3: auto-activation temp threshold

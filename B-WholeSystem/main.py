@@ -1,27 +1,22 @@
-"""
-Smart Fire Alert System - Whole System (full SRS implementation).
 
-Implements the complete state machine from the SRS:
+#    Sleep ->(slide switch right)->> Awake
+ #   Awake ->(auto: temp>=60C OR LDR smoke)->> Emergency
+  #  Awake ->(Telegram "995")->> Emergency            (manual)
+#    Emergency ->(temp<50C AND moisture, 5s)->> Awake (auto recovery)
+ #   Emergency ->(keypad "123")->> Awake              (false alarm)
 
-    Sleep ->(slide switch right)->> Awake
-    Awake ->(auto: temp>=60C OR LDR smoke)->> Emergency
-    Awake ->(Telegram "995")->> Emergency            (manual)
-    Emergency ->(temp<50C AND moisture, 5s)->> Awake (auto recovery)
-    Emergency ->(keypad "123")->> Awake              (false alarm)
 
-Threading model:
-  - keypad_thread   : HAL keypad scanner -> key queue
-  - monitor_thread  : polls temp + moisture + LDR continuously;
-                      drives auto-detection (entry) and auto-recovery (exit)
-  - telegram_thread : polls Telegram for the "995" manual command
-  - main loop       : applies state transitions + outputs
+#  - keypad_thread   : HAL keypad scanner -> key queue
+ # - monitor_thread  : polls temp + moisture + LDR continuously;
+ #                     drives auto-detection (entry) and auto-recovery (exit)
+ # - telegram_thread : polls Telegram for the "995" manual command
+#  - main loop       : applies state transitions + outputs
 
-Recovery + False Alarm logic is in fire_alarm.py (shared with folder A).
-HAL modules are RPi.GPIO based (Raspberry Pi).
+#Recovery + False Alarm logic is in fire_alarm.py (shared with folder A).
 
-Networking uses the `requests` library directly (no relay needed - the Pi can
-call HTTPS endpoints itself).
-"""
+
+#Networking uses the `requests` library directly
+
 
 import queue
 import threading

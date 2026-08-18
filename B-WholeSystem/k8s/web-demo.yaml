@@ -1,0 +1,38 @@
+# ============================================================
+# Smart Fire Alert - Kubernetes (k3s) web demo deployment
+# A simple HTTP service proving the K8s cluster works.
+# Apply:  sudo k3s kubectl apply -f k8s/
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fire-api
+  labels:
+    app: fire-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fire-api
+  template:
+    metadata:
+      labels:
+        app: fire-api
+    spec:
+      containers:
+        - name: fire-api
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fire-api
+spec:
+  selector:
+    app: fire-api
+  ports:
+    - port: 80
+      targetPort: 80
+  type: NodePort

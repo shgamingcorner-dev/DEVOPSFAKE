@@ -1,0 +1,15 @@
+# ============================================================
+# Smart Fire Alert - docker-compose (easiest way to run)
+# Usage:  sudo docker-compose up -d --build
+# ============================================================
+version: "3"
+
+services:
+  fire-alert:
+    build: .
+    image: smart-fire-alert:latest
+    container_name: fire-alert
+    privileged: true            # GPIO/LCD/RFID peripheral access (Lab 8 p.8)
+    env_file:
+      - .env                    # real keys (TELEGRAM_*, THINGSPEAK_API_KEY)
+    restart: unless-stopped

@@ -223,63 +223,35 @@ including the Raspberry Pi. A `Dockerfile` in this folder defines the image:
 | `COPY hal/ ./hal/` | Copy the hardware layer |
 | `CMD ["python3", "main.py"]` | Run the app when the container starts |
 
+**How it works:** when the image is *built*, Docker runs each `COPY` / `RUN`
+step to assemble a self-contained snapshot of the app. When the image is
+*run* as a **container**, the app starts inside an isolated environment with
+its own filesystem and Python — identical on any Pi.
+
 **Why it matters:** it makes the app **portable** (runs identically on any
-Pi), and it isolates the app from the host OS.
-
-**How to build and run:**
-
-```bash
-cd ~/DEVOPSFAKE/B-WholeSystem
-
-# Build the image
-docker build -t smart-fire-alert:latest .
-
-# Run it with access to the Pi's hardware (GPIO / I2C) and your keys
-docker run -d --name fire-alert \
-  --privileged \
-  --device /dev/gpiomem \
-  --device /dev/i2c-1 \
-  --env-file .env \
-  smart-fire-alert:latest
-
-# Or, easier, with docker-compose (privileged + .env already set up)
-sudo docker-compose up -d --build
-
-# Check the logs
-docker logs -f fire-alert
-```
+Pi) and **isolated** (the container's files and libraries do not clash with
+the host OS). Because this app talks to the Pi's hardware (GPIO / I2C for
+the sensors, buzzer, LCD, servo), the container is run with privileged
+hardware access.
 
 ### 6.2 What Kubernetes does
 
 Kubernetes (K8s) **manages containers at scale** — it starts, restarts,
 scales and exposes containers (called **Pods**) automatically. On the Pi we
-use **k3s**, a lightweight K8s built for small devices.
+use **k3s**, a lightweight Kubernetes distribution built for small devices.
 
-**Why it matters:** it shows the app can be deployed like a real production
-service — a Deployment describes the desired state, and K8s keeps it running.
-
-**How to set up and deploy:**
-
-```bash
-# 1. Install k3s (lightweight Kubernetes for the Pi)
-curl -sfL https://get.k3s.io | sh -
-sudo k3s kubectl get nodes        # the Pi should show as Ready
-
-# 2. Deploy the demo web service (a Deployment + Service)
-sudo k3s kubectl apply -f k8s/
-sudo k3s kubectl get pods         # wait for Running
-sudo k3s kubectl get svc          # note the NodePort
-
-# 3. Test it
-curl http://localhost:<NodePort>
-```
-
-The `k8s/web-demo.yaml` file contains two objects:
+**How it works:** you describe what you want in a manifest file, and
+Kubernetes makes it happen:
 
 | Object | Purpose |
 |---|---|
-| `Deployment` | Tells Kubernetes to run 1 replica of a container and keep it running |
-| `Service` | Exposes the container on a port (NodePort) so it can be reached |
+| `Deployment` | Tells Kubernetes to run a number of replicas of a container and keep them running (restarts them if they crash) |
+| `Service` | Exposes the Pods on a network port so other machines can reach them |
+
+**Why it matters:** it shows the app can be deployed like a real production
+service — the Deployment describes the desired state, and Kubernetes
+continuously works to keep the system in that state (self-healing, scaling,
+rolling updates).
 
 ---
 

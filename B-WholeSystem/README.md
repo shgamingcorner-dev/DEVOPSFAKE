@@ -148,6 +148,14 @@ read (GPIO pin-mode race), and a mutex around LCD writes (I2C bus corruption).
 
 ### 4.2 Setup
 
+> **⚠️ IMPORTANT — configure the `.env` file first.**
+> The app reads its credentials from `.env` (Telegram bot token, the three
+> chat IDs, and the ThingSpeak API key). **If `.env` is missing or has
+> placeholder values, the app will start but Telegram alerts and ThingSpeak
+> uploads will FAIL** (you will see `[env] ThingSpeak key: MISSING/placeholder`
+> at startup). `.env` is gitignored, so a fresh clone does NOT include it —
+> you must create it.
+
 ```bash
 # 1. Clone / pull the repo
 git clone https://github.com/shgamingcorner-dev/DEVOPSFAKE.git
@@ -157,11 +165,16 @@ cd DEVOPSFAKE/B-WholeSystem
 pip3 install -r requirements.txt
 #   (RPi.GPIO, spidev, smbus, requests, python-dotenv)
 
-# 3. Create .env from the template (fill in REAL credentials - never commit)
+# 3. Configure the .env file (REQUIRED - do this before running)
 cp .env.example .env
 nano .env
-#   TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_CHAT_ID,
-#   TELEGRAM_CAREGIVER_CHAT_ID, TELEGRAM_SCDF_CHAT_ID, THINGSPEAK_API_KEY
+#   Fill in REAL values for ALL of these:
+#   TELEGRAM_BOT_TOKEN        <- from @BotFather
+#   TELEGRAM_OWNER_CHAT_ID    <- your chat id
+#   TELEGRAM_CAREGIVER_CHAT_ID
+#   TELEGRAM_SCDF_CHAT_ID
+#   THINGSPEAK_API_KEY        <- from your ThingSpeak channel
+#   Do NOT commit .env (it is gitignored)
 
 # 4. Run
 sudo python3 main.py

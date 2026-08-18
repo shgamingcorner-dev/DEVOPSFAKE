@@ -50,75 +50,42 @@ uploads sensor readings to **ThingSpeak** for remote monitoring.
 
 ### 2.1 Use Case Diagram
 
-```mermaid
-graph TD
-    Actor1[Owner / Caregiver / SCDF]
-    Actor2[Elderly User]
-
-    Actor2 --> UC1[Slide switch to Awake]
-    Actor2 --> UC2[Enter keypad 123<br/>false alarm deactivation]
-    Actor1 --> UC3[Send Telegram 995<br/>manual activation]
-    Actor1 --> UC4[Receive Telegram alert<br/>Fire detected!]
-
-    UC1 --> System[Smart Fire Alert System]
-    UC2 --> System
-    UC3 --> System
-    System --> UC4
-    System --> UC5[Detect fire: temp / smoke]
-    System --> UC6[Activate buzzer / LED / servo]
-    System --> UC7[Upload to ThingSpeak]
-    UC5 --> UC6
 ```
-
-*(ASCII fallback)*
-```
-            +---------------------------------------------+
-            |              Smart Fire Alert System        |
-            +---------------------------------------------+
-  Owner/     |  (detect fire)  (activate devices)  (upload) |
-  Caregiver  |        ^                |              ^     |
-  / SCDF     |        |                v              |     |
-   (995) ----+--> [manual activation]  |         [ThingSpeak]|
-   (alert)-- |<-- [Telegram alert]     |              |     |
-            |        |                v              |     |
-  Elderly    |  (slide switch)  [buzzer/LED/servo]    |     |
-   user -----+--> [Sleep -> Awake]    |              |     |
-   (123) ----+--> [false alarm] ------+--------------+-----+
-            +---------------------------------------------+
+             +---------------------------------------------+
+             |              Smart Fire Alert System        |
+             +---------------------------------------------+
+   Owner/     |  (detect fire)  (activate devices)  (upload) |
+   Caregiver  |        ^                |              ^     |
+   / SCDF     |        |                v              |     |
+    (995) ----+--> [manual activation]  |         [ThingSpeak]|
+    (alert)-- |<-- [Telegram alert]     |              |     |
+             |        |                v              |     |
+   Elderly    |  (slide switch)  [buzzer/LED/servo]    |     |
+    user -----+--> [Sleep -> Awake]    |              |     |
+    (123) ----+--> [false alarm] ------+--------------+-----+
+             +---------------------------------------------+
 ```
 
 ### 2.2 State Machine Diagram
 
-```mermaid
-stateDiagram-v2
-    [*] --> Sleep: power on
-    Sleep --> Awake: slide switch right
-    Awake --> Emergency: temp >= 60 C OR LDR smoke
-    Awake --> Emergency: Telegram "995"
-    Emergency --> Awake: temp < 50 C AND moisture (5 s)
-    Emergency --> Awake: keypad "123" (false alarm)
-    Awake --> Sleep: slide switch left
 ```
-
-*(ASCII fallback)*
-```
-                 +--------+
-   power on      | Sleep  |
-    +----------->|        |
-    |            +--------+
-    |              |  slide switch right
-    |              v
-    |            +--------+      temp >= 60 C OR LDR smoke      +------------+
-    |            | Awake  | ----------------------------------->| Emergency  |
-    |            |        |      Telegram "995"                 |            |
-    |            +--------+ ----------------------------------->|            |
-    |              |                                            +------------+
-    |              |  slide switch left                          |     |     |
-    |              |             temp < 50 C AND moisture (5 s)  |     |     |
-    |              v             keypad "123" (false alarm)      |     |     |
-    |            +--------+ <------------------------------------+     |     |
-    +------------| Sleep  | <------------------------------------------+     |
-                 +--------+                                                  |
+                  +--------+
+   power on       | Sleep  |
+    +------------>|        |
+    |             +--------+
+    |               |  slide switch right
+    |               v
+    |             +--------+     temp >= 60 C OR LDR smoke     +------------+
+    |             | Awake  | ---------------------------------> | Emergency  |
+    |             |        |     Telegram "995"                |            |
+    |             +--------+ ---------------------------------> |            |
+    |               |                                          +------------+
+    |               |  slide switch left                         |     |     |
+    |               |          temp < 50 C AND moisture (5 s)    |     |     |
+    |               v          keypad "123" (false alarm)        |     |     |
+    |             +--------+ <-----------------------------------+     |     |
+    +-------------| Sleep  | <-----------------------------------------+     |
+                  +--------+                                                  |
 ```
 
 ---
@@ -127,77 +94,22 @@ stateDiagram-v2
 
 ### 3.1 Architecture Diagram
 
-```mermaid
-graph TD
-    subgraph RPi["Raspberry Pi"]
-        subgraph App["Application Layer"]
-            MAIN["main.py<br/>(state machine + threads)"]
-            FA["fire_alarm.py<br/>(recovery + false alarm logic)"]
-            ER["emergency_response.py<br/>(buzzer/LED/servo/LCD)"]
-            TB["telegram_bot.py<br/>(Telegram alerts + 995)"]
-        end
-        subgraph HAL["Hardware Abstraction Layer (hal/)"]
-            DHT["hal_temp_humidity_sensor"]
-            LDR["hal_adc (LDR)"]
-            MOIS["hal_moisture_sensor"]
-            KP["hal_keypad"]
-            SW["hal_input_switch"]
-            BUZ["hal_buzzer"]
-            LED["hal_led"]
-            SRV["hal_servo"]
-            LCD["hal_lcd"]
-        end
-        subgraph HW["Sensors & Actuators"]
-            S1["DHT11 temp / humidity"]
-            S2["LDR light / smoke"]
-            S3["Moisture sensor"]
-            S4["Keypad"]
-            S5["Slide switch"]
-            A1["Buzzer"]
-            A2["Red LED"]
-            A3["Servo sprinkler"]
-            A4["LCD"]
-        end
-    end
-
-    MAIN --> FA
-    MAIN --> ER
-    MAIN --> TB
-    MAIN --> HAL
-    FA --> HAL
-    ER --> HAL
-    TB --> TG["Telegram Bot API"]
-    TB --> TS["ThingSpeak API"]
-
-    HAL --> DHT & LDR & MOIS & KP & SW & BUZ & LED & SRV & LCD
-    DHT --> S1
-    LDR --> S2
-    MOIS --> S3
-    KP --> S4
-    SW --> S5
-    BUZ --> A1
-    LED --> A2
-    SRV --> A3
-    LCD --> A4
 ```
-
-*(ASCII fallback)*
-```
-                      Raspberry Pi
-   +-------------------------------------------------------------+
-   |  Application Layer                                          |
+                        Raspberry Pi
+   +---------------------------------------------------------------+
+   |  Application Layer                                            |
    |   main.py  fire_alarm.py  emergency_response.py  telegram_bot.py |
-   |      |          |              |                   |         |
-   |      +----------+--------------+-------------------+         |
-   |                    | (HAL API calls)                         |
-   |  Hardware Abstraction Layer (hal/)                           |
+   |      |          |              |                   |           |
+   |      +----------+--------------+-------------------+           |
+   |                    | (HAL API calls)                           |
+   |  Hardware Abstraction Layer (hal/)                             |
    |   temp  adc  moisture  keypad  switch  buzzer  led  servo  lcd |
    |      |     |     |       |       |      |     |    |     |     |
-   |  Sensors & Actuators                                        |
+   |  Sensors & Actuators                                          |
    |   DHT11 LDR  moisture  keypad  switch  buzzer  LED  servo  LCD |
-   +-------------------------------------------------------------+
-        |                                     |
-        v                                     v
+   +---------------------------------------------------------------+
+        |                                       |
+        v                                       v
    Telegram Bot API                    ThingSpeak API
    (alerts / 995)                      (sensor logs)
 ```
@@ -290,7 +202,100 @@ sudo python3 test_hardware.py
 
 ---
 
-## 6. Docker + Kubernetes (course requirement)
+## 6. Docker and Kubernetes
 
-See **[DOCKER_K8S_GUIDE.md](./DOCKER_K8S_GUIDE.md)** for containerizing the
-app (Lab 8 style) and running it under Kubernetes (k3s) on the Pi.
+This project can also be **containerised with Docker** and run under
+**Kubernetes (k3s)** on the Raspberry Pi.
+
+### 6.1 What Docker does
+
+Docker packages the application (code + Python libraries + settings) into a
+single **image** that can be built and run on any machine with Docker —
+including the Raspberry Pi. A `Dockerfile` in this folder defines the image:
+
+| Line | What it does |
+|---|---|
+| `FROM arm32v7/python:3.7-slim-buster` | Start from a Python 3.7 image built for the Pi's ARM processor |
+| `WORKDIR /app` | Set the working folder inside the container |
+| `COPY requirements.txt .` | Copy the dependency list |
+| `RUN pip3 install -r requirements.txt` | Install the Python libraries |
+| `COPY main.py ... ./` | Copy the application code |
+| `COPY hal/ ./hal/` | Copy the hardware layer |
+| `CMD ["python3", "main.py"]` | Run the app when the container starts |
+
+**Why it matters:** it makes the app **portable** (runs identically on any
+Pi), and it isolates the app from the host OS.
+
+**How to build and run:**
+
+```bash
+cd ~/DEVOPSFAKE/B-WholeSystem
+
+# Build the image
+docker build -t smart-fire-alert:latest .
+
+# Run it with access to the Pi's hardware (GPIO / I2C) and your keys
+docker run -d --name fire-alert \
+  --privileged \
+  --device /dev/gpiomem \
+  --device /dev/i2c-1 \
+  --env-file .env \
+  smart-fire-alert:latest
+
+# Or, easier, with docker-compose (privileged + .env already set up)
+sudo docker-compose up -d --build
+
+# Check the logs
+docker logs -f fire-alert
+```
+
+### 6.2 What Kubernetes does
+
+Kubernetes (K8s) **manages containers at scale** — it starts, restarts,
+scales and exposes containers (called **Pods**) automatically. On the Pi we
+use **k3s**, a lightweight K8s built for small devices.
+
+**Why it matters:** it shows the app can be deployed like a real production
+service — a Deployment describes the desired state, and K8s keeps it running.
+
+**How to set up and deploy:**
+
+```bash
+# 1. Install k3s (lightweight Kubernetes for the Pi)
+curl -sfL https://get.k3s.io | sh -
+sudo k3s kubectl get nodes        # the Pi should show as Ready
+
+# 2. Deploy the demo web service (a Deployment + Service)
+sudo k3s kubectl apply -f k8s/
+sudo k3s kubectl get pods         # wait for Running
+sudo k3s kubectl get svc          # note the NodePort
+
+# 3. Test it
+curl http://localhost:<NodePort>
+```
+
+The `k8s/web-demo.yaml` file contains two objects:
+
+| Object | Purpose |
+|---|---|
+| `Deployment` | Tells Kubernetes to run 1 replica of a container and keep it running |
+| `Service` | Exposes the container on a port (NodePort) so it can be reached |
+
+---
+
+## 7. File reference
+
+| File | Purpose |
+|---|---|
+| `main.py` | Threaded whole-system app (states, sensors, outputs) |
+| `fire_alarm.py` | Recovery + false-alarm logic |
+| `emergency_response.py` | Emergency response actions (buzzer/LED/servo/LCD/Telegram) |
+| `telegram_bot.py` | Telegram integration (REQ-07 alerts, REQ-04 '995') |
+| `test_fire_alarm.py` | Unit tests (pytest) |
+| `test_hardware.py` | Hardware walkthrough script (SRS-driven) |
+| `hal/` | Hardware Abstraction Layer (RPi.GPIO) |
+| `Dockerfile` | Defines the Docker image |
+| `docker-compose.yml` | One-command Docker run (privileged + .env) |
+| `k8s/` | Kubernetes manifests (Deployment + Service) |
+| `requirements.txt` | Python dependencies |
+| `.env.example` | Template for credentials (never commit `.env`) |

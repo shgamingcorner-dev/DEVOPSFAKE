@@ -207,51 +207,39 @@ sudo python3 test_hardware.py
 This project can also be **containerised with Docker** and run under
 **Kubernetes (k3s)** on the Raspberry Pi.
 
-### 6.1 What Docker does
+### 6.1 Docker
 
-Docker packages the application (code + Python libraries + settings) into a
-single **image** that can be built and run on any machine with Docker —
-including the Raspberry Pi. A `Dockerfile` in this folder defines the image:
+A `Dockerfile` in this folder defines a Docker **image** of the app:
 
 | Line | What it does |
 |---|---|
-| `FROM arm32v7/python:3.7-slim-buster` | Start from a Python 3.7 image built for the Pi's ARM processor |
-| `WORKDIR /app` | Set the working folder inside the container |
-| `COPY requirements.txt .` | Copy the dependency list |
-| `RUN pip3 install -r requirements.txt` | Install the Python libraries |
-| `COPY main.py ... ./` | Copy the application code |
-| `COPY hal/ ./hal/` | Copy the hardware layer |
-| `CMD ["python3", "main.py"]` | Run the app when the container starts |
+| `FROM arm32v7/python:3.7-slim-buster` | Uses a Python 3.7 base image built for the Pi's ARM processor so the container can run on the Pi |
+| `WORKDIR /app` | Sets the working folder inside the container so the app files go there |
+| `COPY requirements.txt .` | Brings the dependency list into the image |
+| `RUN pip3 install -r requirements.txt` | Installs the Python libraries so the app has everything it needs |
+| `COPY main.py ... ./` | Brings the application code into the image |
+| `COPY hal/ ./hal/` | Brings the hardware layer into the image |
+| `CMD ["python3", "main.py"]` | Runs the app when the container starts |
 
-**How it works:** when the image is *built*, Docker runs each `COPY` / `RUN`
-step to assemble a self-contained snapshot of the app. When the image is
-*run* as a **container**, the app starts inside an isolated environment with
-its own filesystem and Python — identical on any Pi.
+So: I package the app into a Docker **image** so it runs in an isolated
+**container** with the same code, libraries and settings on any Pi, and I
+give the container privileged hardware access so it can still talk to the
+GPIO / I2C sensors and actuators.
 
-**Why it matters:** it makes the app **portable** (runs identically on any
-Pi) and **isolated** (the container's files and libraries do not clash with
-the host OS). Because this app talks to the Pi's hardware (GPIO / I2C for
-the sensors, buzzer, LCD, servo), the container is run with privileged
-hardware access.
+### 6.2 Kubernetes
 
-### 6.2 What Kubernetes does
-
-Kubernetes (K8s) **manages containers at scale** — it starts, restarts,
-scales and exposes containers (called **Pods**) automatically. On the Pi we
-use **k3s**, a lightweight Kubernetes distribution built for small devices.
-
-**How it works:** you describe what you want in a manifest file, and
-Kubernetes makes it happen:
+Kubernetes (K8s) manages containers. On the Pi we use **k3s**, a lightweight
+Kubernetes distribution for small devices. I write a **manifest** describing
+what should run:
 
 | Object | Purpose |
 |---|---|
-| `Deployment` | Tells Kubernetes to run a number of replicas of a container and keep them running (restarts them if they crash) |
-| `Service` | Exposes the Pods on a network port so other machines can reach them |
+| `Deployment` | Tells Kubernetes to run replicas of a container and keep them running, so the app restarts automatically if it crashes |
+| `Service` | Exposes the Pods on a network port, so other machines can reach the app |
 
-**Why it matters:** it shows the app can be deployed like a real production
-service — the Deployment describes the desired state, and Kubernetes
-continuously works to keep the system in that state (self-healing, scaling,
-rolling updates).
+So: I describe the container in a Deployment + Service manifest so
+Kubernetes keeps it running, restarts it on failure, and exposes it on a
+port — like a real production deployment.
 
 ---
 
